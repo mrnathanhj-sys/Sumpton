@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--ARTIFACT-START-->
+<title>Sumpton Underworld Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;700&family=Alegreya:ital,wght@0,400;0,600;1,400&family=Alegreya+SC:wght@500;700&display=swap">
+<style>
+/* Layout: a full-bleed surveyor's chart of the underworld; title cartouche top-left,
+   controls top-right, legend bottom-left, details slide in as a ledger page (bottom sheet on phones). */
+:root {
+  --earth: #17120e;       /* cavern dark, the ground of the map */
+  --loam: #261c15;        /* panels and bands */
+  --ink: #e9dcbf;         /* parchment-ink text */
+  --ink-dim: #b3a383;     /* secondary text */
+  --ember: #e0782f;       /* routes and the one accent */
+  --blood: #b8382b;       /* gang-raid tunnels, warnings */
+  --slime: #9cc23f;       /* Scroblin green */
+  --rule: #4a3a2c;        /* hairlines */
+  --font-display: "Grenze Gotisch", "UnifrakturMaguntia", Georgia, serif;
+  --font-body: "Alegreya", Georgia, "Times New Roman", serif;
+  --font-label: "Alegreya SC", "Alegreya", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--earth); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+#app { position: relative; height: 100%; width: 100%; overflow: hidden; }
+#map { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#map.dragging { cursor: grabbing; }
+
+/* ---------- Title cartouche ---------- */
+.cartouche {
+  position: absolute; z-index: 5;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--loam) 88%, transparent);
+  border: 1px solid var(--rule); border-radius: 3px;
+  padding: 10px 16px 12px; max-width: min(360px, calc(100% - 140px));
+  box-shadow: 0 6px 24px #0008;
+}
+.cartouche h1 {
+  font-family: var(--font-display); font-weight: 700; margin: 0;
+  font-size: clamp(26px, 4vw, 40px); line-height: 1; letter-spacing: .01em; color: var(--ink);
+  text-wrap: balance;
+}
+.cartouche p { margin: 6px 0 0; font-size: 14px; color: var(--ink-dim); line-height: 1.35; }
+.cartouche .sub { font-family: var(--font-label); letter-spacing: .08em; font-size: 12px; color: var(--ember); margin: 0 0 2px; }
+
+/* ---------- Controls ---------- */
+.controls {
+  position: absolute; z-index: 5; display: flex; flex-direction: column; gap: 6px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+}
+.btn {
+  font: 600 15px/1 var(--font-body); color: var(--ink);
+  background: var(--loam); border: 1px solid var(--rule); border-radius: 3px;
+  min-width: 42px; height: 42px; padding: 0 12px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn:hover { border-color: var(--ember); }
+.btn:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.btn svg { width: 18px; height: 18px; }
+.btn.primary { background: var(--ember); color: #1a0f07; border-color: var(--ember); }
+
+/* ---------- Legend ---------- */
+.legend {
+  position: absolute; z-index: 4;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--loam) 88%, transparent);
+  border: 1px solid var(--rule); border-radius: 3px; padding: 10px 12px;
+  font-size: 13px; color: var(--ink-dim);
+  display: grid; grid-template-columns: auto auto; gap: 6px 18px;
+}
+.legend .k { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.legend svg { flex: none; }
+.legend .hint { grid-column: 1 / -1; font-style: italic; border-top: 1px solid var(--rule); padding-top: 6px; }
+.legend-toggle { display: none; }
+
+/* ---------- Detail panel (ledger page) ---------- */
+.panel {
+  position: absolute; z-index: 10; top: 0; right: 0; bottom: 0;
+  width: min(400px, 100%);
+  background: var(--loam); border-left: 1px solid var(--rule);
+  box-shadow: -12px 0 40px #000a;
+  transform: translateX(105%); transition: transform .28s ease;
+  display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.panel.open { transform: none; }
+.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 0; }
+.panel-body { overflow-y: auto; padding: 8px 20px 24px; min-height: 0; }
+.eyebrow { font-family: var(--font-label); letter-spacing: .1em; font-size: 13px; color: var(--ember); margin: 0; }
+.panel h2 { font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1.02; margin: 4px 0 10px; text-wrap: balance; }
+.panel p { line-height: 1.55; margin: 0 0 12px; max-width: 65ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.chip { font-family: var(--font-label); font-size: 12px; letter-spacing: .06em; padding: 3px 8px; border-radius: 2px; border: 1px solid var(--rule); color: var(--ink-dim); }
+.chip.done { border-color: var(--slime); color: var(--slime); }
+.chip.kind { color: var(--ink); }
+.cta { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; height: 46px; margin: 4px 0 18px; font-size: 16px; }
+.none { font-style: italic; color: var(--ink-dim); }
+.section-label { font-family: var(--font-label); letter-spacing: .08em; font-size: 13px; color: var(--ink-dim); margin: 16px 0 6px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
+.linklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.linklist button, .linklist a {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  width: 100%; padding: 7px 8px; border-radius: 2px; color: var(--ink); line-height: 1.3;
+}
+.linklist button:hover, .linklist a:hover { background: #ffffff0d; }
+.linklist button:focus-visible, .linklist a:focus-visible { outline: 2px solid var(--ember); }
+.linklist .meta { font-size: 13px; color: var(--ink-dim); white-space: nowrap; }
+.source { font-size: 13px; color: var(--ink-dim); font-style: italic; margin-top: 18px; }
+.source a { color: var(--ink-dim); }
+
+/* ---------- Mission index ---------- */
+.search { width: 100%; box-sizing: border-box; height: 42px; padding: 0 12px; margin: 6px 0 4px;
+  background: var(--earth); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; font: 16px var(--font-body); }
+.realm-group h3 { font-family: var(--font-label); font-size: 14px; letter-spacing: .08em; color: var(--ember); margin: 16px 0 4px; font-weight: 700; }
+
+/* ---------- SVG map styling ---------- */
+.realm-shape { cursor: pointer; transition: filter .2s; }
+.realm-shape:hover { filter: brightness(1.25); }
+.realm-label { cursor: pointer; }
+.realm-label text { font-family: var(--font-display); font-weight: 700; fill: var(--ink); }
+.realm-label:hover rect { stroke: var(--ember); }
+.node { cursor: pointer; }
+.node text { font-family: var(--font-label); font-weight: 700; pointer-events: none; }
+.node .hex { transition: transform .15s; transform-box: fill-box; transform-origin: center; }
+.node:hover .hex, .node.active .hex { stroke: var(--ink); stroke-width: 5; }
+.node:focus { outline: none; }
+.node:focus-visible .hex { stroke: var(--ember); stroke-width: 7; }
+.route { fill: none; stroke: var(--ember); stroke-width: 6; stroke-dasharray: 16 10; stroke-linecap: round; }
+.route.scroblin { stroke: var(--slime); }
+.passage { fill: none; stroke: var(--blood); stroke-width: 11; stroke-dasharray: 2 16; stroke-linecap: round; opacity: .9; }
+.tether { fill: none; stroke: var(--ink-dim); stroke-width: 4; stroke-dasharray: 12 10; opacity: .7; }
+.flow { animation: flow 1.6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -52; } }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; } .panel { transition: none; } }
+.dim { opacity: .25; transition: opacity .2s; }
+
+@media (max-width: 640px) {
+  .cartouche p { display: none; }
+  .legend { display: none; }
+  .legend.show { display: grid; grid-template-columns: 1fr; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .legend-toggle { display: inline-flex; position: absolute; z-index: 5;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); }
+  .panel { top: auto; width: 100%; max-height: 66%; border-left: 0; border-top: 1px solid var(--rule);
+    transform: translateY(105%); border-radius: 10px 10px 0 0; padding-right: 0; }
+  .panel-head, .panel-body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .panel h2 { font-size: 28px; }
+}
+</style>
+
+<div id="app">
+  <svg id="map" role="img" aria-label="Interactive map of Sumpton, the underworld beneath Dumpton"></svg>
+
+  <header class="cartouche">
+    <p class="sub">Dumpton &middot; As Above, So Below</p>
+    <h1>Sumpton</h1>
+    <p>Tap a realm for its lore, or a mission for its brief.</p>
+  </header>
+
+  <nav class="controls" aria-label="Map controls">
+    <button class="btn primary" id="btn-index" aria-label="Open mission index">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Missions
+    </button>
+    <button class="btn" id="btn-in" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="btn" id="btn-out" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg>
+    </button>
+    <button class="btn" id="btn-fit" aria-label="Show whole map">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </nav>
+
+  <button class="btn legend-toggle" id="btn-legend" aria-expanded="false">Key</button>
+  <aside class="legend" id="legend" aria-label="Map key"></aside>
+
+  <aside class="panel" id="panel" aria-live="polite">
+    <div class="panel-head">
+      <div id="panel-eyebrow" class="eyebrow"></div>
+      <button class="btn" id="panel-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+/* =========================================================
+   DATA — schematic positions come from the Sumpton Schematic
+   draw.io file; links from the Game Tracker sheet; lore from
+   "Realms of Sumpton v2".
+   ========================================================= */
+const drive = id => `https://drive.google.com/file/d/${id}/view`;
+
+const RESOURCES = [
+  { name: "Realms of Sumpton", id: "1DrTJucBIF2r4TlsSbWQ2BhftdD2islzi", note: "Realm lore" },
+  { name: "Sumpton Schematic", id: "1nIS1WF4DeiMOSVvHfkcTXiK3HGfMdvo_", note: "Original map" },
+  { name: "Pack 4.3", id: "1X97lLUHRTSOl_7ZQGwljYxl1ko01nFRZ", note: "Pack" },
+  { name: "The Great Divide", id: "1LiAooqX7747wdv2dDdfZbHAS3r75VBXQ", note: "Pack" },
+  { name: "The Megasphere Enclaves", id: "1J0-Cgd_TcLCZ6rDacBN5kYyQ4dsB9bVo", note: "Realm update" },
+  { name: "The Brown Wedding", id: "1XXno9V3vah-NJQCfTErQLXjxjrcWx76X", note: "Realm update" },
+  { name: "Sumpton Badzone", id: "13qO17wi8xZYTYshqpI2a883DCAcxen3e", note: "Misc" },
+  { name: "Valley of The Bins", id: "104tcycSokaZDArthzVRHyO26eOe5uXke", note: "Gang raids" },
+  { name: "Alpha Predator", id: "1m1_15IFRmfrGhnowtO7HoGBa95pwNHxp", note: "Hired creature" },
+];
+
+const REALMS = [
+  { id: "piscus", name: "Piscus Dimension", cx: 280, cy: 1000, r: 270, color: "#a39020", lx: 20, ly: 950, status: "Complete",
+    lore: [
+      "The Piscus Dimension sits just beneath the Drowned Nations and is a truly vile and foul-smelling zone of urine and death. It receives heavy liquid slurry deposits from cracks in the bedrock, but sits beside several Scroblin Brothel factoria whose radiation, heat and fumes evaporate any liquid in short order.",
+      "Hazard suits and respirators are highly recommended but not required for workers. The self-elected Scroblin Mayor Dialatov Johnson espouses the Stockton approach to nuclear reactor protocols: “at some point pure waste becomes safe”."
+    ] },
+  { id: "primary", name: "Primary Tunnel Settlements", cx: 70, cy: 550, r: 310, color: "#6a3713", lx: 215, ly: 235, status: "Complete",
+    lore: ["A seemingly abandoned city complex. It is unclear where the majority of the jobsworth occupants disappeared to. Full of mostly broken and guano-stained machinery, it has the essence and stench of a bird cage long since cleaned."] },
+  { id: "drowned", name: "The Drowned Nations", cx: 530, cy: 625, r: 240, color: "#1e7aa1", lx: 830, ly: 462, status: "Complete",
+    lore: [
+      "The flooded byways of Sumpton: a treasure trove of potential riches and illegal items that are inevitably forced down the latrines of Dumpton. Numerous Ghast Crocs have been spotted and insidious fungal growths adorn many surfaces.",
+      "Some say King Xerxes met his Merwoman lover here to spawn their beloved heir Petsuchos. Others suggest Petsuchos was most likely a deformed Goliath croc flushed into Sumpton and left to die, but is now a genejacked monstrosity. The truth is supposedly out there."
+    ] },
+  { id: "hives", name: "The Scroblin Hives", cx: 1567, cy: 717, r: 227, color: "#4f7f37", lx: 1531, ly: 500, status: "Complete",
+    lore: ["The seat of the Scroblin Parliament and the MPS (Mutated Proficient Scroblins). You will never find a more wretched hive of scum and villainy. Be extremely cautious dealing with these degenerates."] },
+  { id: "inbetween", name: "The Inbetween", cx: 1167, cy: 906, r: 226, color: "#118d7c", lx: 1021, ly: 1102, status: "Complete",
+    lore: ["The deep reaches between the Drowned Nations and the Scroblin Hives, where the Brown Wedding spilled out. It is home to Gambit's Jeopardy, the bio-dome of Big Game Xeno hunter Colbert Mungdoom, and a camp of whoever survived."],
+    note: "Realms of Sumpton describes this area through Gambit's Jeopardy; it has no entry of its own." },
+  { id: "xerxes", name: "The Kingdom of Xerxes", cx: 2250, cy: 885, r: 230, color: "#1d4a32", lx: 2420, ly: 682, status: null,
+    lore: ["Few have visited this realm and lived to tell the tale. Those that have returned from the Scrunthole are often completely insane, ranting about Fishmen, Wererats, multi-armed ghouls and other fanciful, ridiculous tales."] },
+  { id: "megasphere", name: "Megasphere Enclave", cx: 475, cy: 295, r: 215, color: "#7a2c7a", lx: 360, ly: 70, status: "Complete",
+    pack: "1J0-Cgd_TcLCZ6rDacBN5kYyQ4dsB9bVo", packName: "The Megasphere Enclaves",
+    lore: ["An uncharted region of Sumpton. Legends persist that hybrid cybrid carnivores stalk the tunnel passageways. Its ruler is supposedly a man wedded to the purity of logic found in machine love.",
+           "Beware: local Scroblins have warned of a horde of FDM (Flather Destroyer Murder) constructs posing as humans inhabiting the area."] },
+  { id: "stockton", name: "Stockton's Folly", cx: -345, cy: 610, r: 195, color: "#4f6f1d", lx: -545, ly: 490, status: "Complete",
+    lore: ["A previously unexplored area, discovered when an amateur experimental mining automaton exploded. It was designed by the late megalomaniac Scroblin Ser Russsh. No survivors were recovered, but several valuable pieces of 2nd grade adamantine fibre were found.",
+           "Now a popular tourist destination for Dumptonian thrill seekers."] },
+  { id: "aqueduct", name: "Dumpton Aqueduct", cx: -450, cy: 25, r: 190, color: "#8a5232", lx: -272, ly: -125, status: null,
+    lore: ["The main aqueduct out of Dumpton, and the way down. The rewilding projects opened its floodgates, which are now rusted and fused in place."],
+    note: "Summarised from the Outer Catacombs entry in Realms of Sumpton." },
+  { id: "catacombs", name: "Outer Catacombs", cx: -250, cy: 255, r: 175, color: "#98571f", lx: -112, ly: 95, status: "Complete",
+    lore: ["Just below Dumpton, the catacombs intersect with the sewer system and the main aqueduct. Often gated, but following the rewilding projects the floodgates have been opened and are now rusted and fused in place.",
+           "A horde of refugee “hivers” have since begun emigrating to the prosperous realm above, with disastrous consequences for the UKD (United Kingdom of Dumpton)."] },
+  { id: "scrunthole", name: "Dumpton Passage “Scrunthole”", cx: 1779, cy: -25, r: 125, color: "#6a1212", lx: 1975, ly: -110, status: null,
+    lore: ["Previously owned by the Le Scrunt Dickey Mining Company, this vertical hole in the ground is an ideal dumping place for toxic waste and irritating gangers. The mine was deemed possibly dangerous after Stinky Pete of the Barony of Lead tripped and bludgeoned himself to death falling down it. His body was never recovered, and legal proceedings have been ongoing ever since.",
+           "Unbeknown to Dumptonites, the Scrunthole leads directly to the (now poisoned) Bleakpool Ceynotes and a flooded area of the Valley of the Bins. King Xerxes has raised numerous letters of complaint, but all have been rejected due to his “Mudskipper” heritage."] },
+  { id: "warrens", name: "The Warrens of Thought", cx: 1150, cy: 1295, rx: 315, ry: 82, color: "#6a1d52", lx: 1270, ly: 1222, status: null,
+    lore: ["Little is known about this mysterious place, for its Emissaries are tight-lipped and outsiders are strictly forbidden. Nonetheless the ratlike companions make welcome additions to any crew and are highly sociable creatures. The Scroblins seem to treat them with high regard.",
+           "Their fur and skins also happen to be extremely valuable in the exotic black market trade…"] },
+  { id: "bleakpool", name: "Bleakpool Ceynote", cx: 1840, cy: 1710, rx: 430, ry: 62, color: "#4b7a12", lx: 2090, ly: 1617, status: null,
+    lore: ["The poisoned Bleakpool Ceynotes lie at the bottom of the Scrunthole, where Dumpton's toxic waste ends up. A long, winding passage climbs from here all the way back to the surface."],
+    note: "Summarised from the Scrunthole entry in Realms of Sumpton." },
+  { id: "valley", name: "Valley of the Bins", band: true, lx: 650, ly: 1600, status: null,
+    pack: "104tcycSokaZDArthzVRHyO26eOe5uXke", packName: "Valley of The Bins gang raids",
+    lore: ["The revered resting place of influential socialites such as Scrututankamun, Scroblinaten and Scroblicticus, amongst many others. Many treasures can be found in this disgusting place, but one wrong step and a ganger can be lost for days amongst the effluence. Let alone attacked by a pack of the Frenzoid Foxes that have infested the area.",
+           "Gang raids can be played against any gang, maximum 3 games per realm. Every raid must be recorded in the tracker."] },
+  { id: "dumpton", name: "Dumpton “As Above”", surface: true, status: null,
+    lore: ["The United Kingdom of Dumpton, the prosperous realm above. Everything it flushes, dumps or forgets ends up in Sumpton below. Gangs descend by the Aqueduct and, if they survive, climb back out through the Scrunthole."] },
+];
+const realmById = Object.fromEntries(REALMS.map(r => [r.id, r]));
+
+const KINDS = {
+  gate:     { label: "Waypoint",          fill: "#9cb8e4", stroke: "#4d6fa3", text: "#10213d" },
+  route:    { label: "Descent mission",   fill: "#7ea6e0", stroke: "#3c5f99", text: "#0d1c35" },
+  skirmish: { label: "Mission",           fill: "#e46c62", stroke: "#8f3029", text: "#2b0b07" },
+  feature:  { label: "Featured mission",  fill: "#f2cc55", stroke: "#a9851f", text: "#2d2203" },
+  scroblin: { label: "Scroblin campaign", fill: "#97d077", stroke: "#4f8a33", text: "#122b07" },
+  pack:     { label: "Realm update",      fill: "#a0522d", stroke: "#e9dcbf", text: "#fff3e0" },
+  area:     { label: "Area of interest",  fill: "#e46c62", stroke: "#e9dcbf", text: "#2b0b07" },
+  lost:     { label: "Lost expedition",   fill: "#0b0806", stroke: "#b8382b", text: "#e9dcbf" },
+  camp:     { label: "Camp",              fill: "#0b0806", stroke: "#e9dcbf", text: "#e9dcbf" },
+};
+
+const STS = "12c50TRbc_f0McWZ8Dx-_UyE-yDeidbzQ";
+const NODES = [
+  { id: "entry", name: "Entry", x: -525, y: -120, kind: "gate", realm: "aqueduct",
+    blurb: "The way down. Gangs descend from Dumpton through the winding Aqueduct to the Outer Catacombs." },
+  { id: "enter-the-underverse", name: "Enter The Underverse", x: -330, y: 165, kind: "route", realm: "catacombs", pdf: "1_Z3VCrldACltB3P2aPjq8NXfWcGj-hbL" },
+  { id: "three-score-and-scroblin", name: "The 3 Score and Scroblin", x: -155, y: 255, kind: "route", realm: "catacombs", pdf: "1-bwAKpEfT6jqKiblJMzi2-kHmFGoRqL3" },
+  { id: "failed-rescue", name: "Failed Rescue of Steve Jobs MK1", x: -345, y: 315, kind: "lost", realm: "catacombs",
+    blurb: "Marked on the schematic as a failed rescue. There is no mission brief for it." },
+  { id: "forgotten-riches", name: "Forgotten Riches", x: -367, y: 525, kind: "skirmish", realm: "stockton" },
+  { id: "sts-stockton", name: "Sumpton Tunnel Skirmish", x: -320, y: 705, kind: "skirmish", realm: "stockton", pdf: STS },
+  { id: "guano-ex-machina", name: "Guano Ex Machina", x: -70, y: 370, kind: "skirmish", realm: "primary", pdf: "18DUg84YDW13HsmgCijpwnTh2MxVgt0B4" },
+  { id: "silence-of-the-scroblins", name: "The Silence of the Scroblins", x: 165, y: 352, kind: "skirmish", realm: "primary", pdf: "1vKrEle4UFb2RMjnYXhWHmXnJzLBAHPQa" },
+  { id: "slum-scrob-millionaire", name: "Slum Scrob Millionaire", x: -25, y: 730, kind: "skirmish", realm: "primary", pdf: "1N3eLJqAh5gnmk3i3fXC01OBng_0leqQW" },
+  { id: "murder-android", name: "Murder Android", x: 465, y: 165, kind: "feature", realm: "megasphere", pdf: "1dA0_-sFZ5zYtTuXL_M_1SLooA1pBgdsa" },
+  { id: "abominable-intelligence", name: "Abominable Intelligence", x: 405, y: 385, kind: "skirmish", realm: "megasphere", pdf: "1OlXBsEfg15nU5_b4tZRxfDXYIUHpbgg_" },
+  { id: "archaeo-scrunters", name: "Archaeo Scrunters", x: 625, y: 315, kind: "skirmish", realm: "megasphere", pdf: "14ed-JCJRL4eYzk1o4-y9FWjD61MEZUmq" },
+  { id: "temple-of-the-crucifish", name: "Temple of the Crucifish", x: 575, y: 525, kind: "feature", realm: "drowned", pdf: "1ykkz4Q_c7J3JvfzNisIQUif2AVyi3wDq" },
+  { id: "sts-drowned", name: "Sumpton Tunnel Skirmish", x: 395, y: 705, kind: "skirmish", realm: "drowned", pdf: STS },
+  { id: "a-ghastly-harvest", name: "A Ghastly Harvest", x: 575, y: 785, kind: "skirmish", realm: "drowned", pdf: "1t3kG5S1PC-nChPZGVMVpcyLVP_2rFxyp" },
+  { id: "frack-crack-and-saac", name: "Frack, Crack and SAAC", x: 415, y: 870, kind: "feature", realm: "piscus", pdf: "1eY_xzkW89BZLCmCQ-E_ZQx11JG5LMjlD" },
+  { id: "sts-piscus", name: "Sumpton Tunnel Skirmish", x: 210, y: 840, kind: "skirmish", realm: "piscus", pdf: STS },
+  { id: "mining-expedition", name: "Mining Expedition", x: 240, y: 1165, kind: "skirmish", realm: "piscus", pdf: "1bM6jFf_lmMQHlHPEtKe1ZxkSZeE45u8V" },
+  { id: "the-brown-wedding", name: "The Brown Wedding", x: 1046, y: 717, kind: "pack", realm: "inbetween", pdf: "1XXno9V3vah-NJQCfTErQLXjxjrcWx76X",
+    blurb: "The realm update that opens the deep reaches. Reached from both the Megasphere Enclave and the Drowned Nations." },
+  { id: "last-rites", name: "Last Rites", x: 1085, y: 965, kind: "skirmish", realm: "inbetween", pdf: "1pQeq0fbTjmsvlzsOKOuTaPNhXPxb7sOR" },
+  { id: "gambits-jeopardy", name: "Gambit's Jeopardy", x: 1225, y: 705, kind: "area", realm: "inbetween",
+    blurb: "A bio-dome in the Inbetweens, home to renowned Big Game Xeno hunter Colbert Mungdoom: a notorious, eccentric man with an even more notorious collection of Alpha level predators. Witnesses tell of huge conversion-field cages hauled into the dome. Rumourmongers speak of Tech Gorgons, Ambulls, Parathian Void Devils and more.",
+    extra: { name: "Alpha Predator (hired creature)", id: "1m1_15IFRmfrGhnowtO7HoGBa95pwNHxp" } },
+  { id: "survivors-camp", name: "Survivors Camp", x: 1260, y: 865, kind: "camp", realm: "inbetween", r: 42,
+    blurb: "A camp between Last Rites and Gambit's Jeopardy, linked to both." },
+  { id: "scroblins", name: "SCROBLINS!!!", x: 1567, y: 695, kind: "scroblin", realm: "hives", pdf: "17_IXm2eluEufKokMk__eASOIBa7suXEI" },
+  { id: "the-hungry-games", name: "The Hungry Games", x: 2128, y: 870, kind: "scroblin", realm: "xerxes", trackerRealm: "hives", pdf: "1T3ZDqIEWopac_EvdbUEVduZAlEEgbkFD" },
+  { id: "the-god-king", name: "The God King", x: 2345, y: 840, kind: "scroblin", realm: "xerxes",
+    blurb: "The final confrontation in the Kingdom of Xerxes. No mission brief is linked in the Game Tracker yet." },
+  { id: "exit", name: "Exit", x: 1779, y: -35, kind: "gate", realm: "scrunthole",
+    blurb: "The way out. A climb up the Scrunthole brings survivors back to Dumpton." },
+];
+const nodeById = Object.fromEntries(NODES.map(n => [n.id, n]));
+
+/* Edges: [from, to, style, waypoints, both-ways]. A from/to may be a point {x,y} (realm edge). */
+const EDGES = [
+  ["entry", "enter-the-underverse", "route", [[-600,60],[-480,220],[-530,-10],[-420,190],[-460,-50],[-400,-90],[-320,-60],[-380,20]]],
+  ["enter-the-underverse", "three-score-and-scroblin", "route", [[-330,250],[-260,270],[-230,160],[-200,150]]],
+  ["three-score-and-scroblin", "forgotten-riches", "route", [[-220,370],[-320,350]]],
+  ["forgotten-riches", "sts-stockton", "route", [[-490,560],[-480,670],[-400,640]]],
+  ["sts-stockton", "guano-ex-machina", "route", [[-130,670],[-220,385]]],
+  ["guano-ex-machina", "silence-of-the-scroblins", "route", [[40,270]], true],
+  ["slum-scrob-millionaire", "silence-of-the-scroblins", "route", [[40,595],[140,620],[110,470]], true],
+  ["guano-ex-machina", "slum-scrob-millionaire", "route", [[-200,530],[-20,540]], true],
+  ["abominable-intelligence", "murder-android", "route", [[330,240],[400,280]], true],
+  ["murder-android", "archaeo-scrunters", "route", [[590,170]], true],
+  ["abominable-intelligence", "archaeo-scrunters", "route", [[470,490],[570,470],[540,380]], true],
+  ["frack-crack-and-saac", "mining-expedition", "route", [], true],
+  ["frack-crack-and-saac", "sts-piscus", "route", [], true],
+  ["temple-of-the-crucifish", "a-ghastly-harvest", "route", [[740,640],[690,700]], true],
+  ["sts-piscus", "mining-expedition", "route", [], true],
+  ["temple-of-the-crucifish", "sts-drowned", "route", [[488,535],[410,620]], true],
+  ["a-ghastly-harvest", "sts-drowned", "route", [[470,760]], true],
+  [{x:690,y:295}, "the-brown-wedding", "route", [[990,295],[990,610]]],
+  [{x:770,y:625}, "the-brown-wedding", "route", []],
+  ["the-brown-wedding", "last-rites", "route", [[1046,810],[980,830],[980,965]]],
+  ["last-rites", "scroblins", "route", [[1470,890],[1420,670]]],
+  ["last-rites", "the-hungry-games", "route", [[1550,1180]]],
+  ["scroblins", "the-hungry-games", "scroblin", [[1870,530]]],
+  ["the-hungry-games", "the-god-king", "scroblin", []],
+  ["the-god-king", "exit", "scroblin", [[1930,500]]],
+  ["exit", "gambits-jeopardy", "tether", [[1779,280],[1225,280]]],
+  ["survivors-camp", "last-rites", "tether", [[1260,965]]],
+  ["survivors-camp", "gambits-jeopardy", "tether", []],
+  // Gang-raid tunnels down to the Valley of the Bins, and the Bleakpool climb
+  [{x:-150,y:780}, {x:-480,y:1670}, "passage", [[-310,860],[-300,1200],[-10,1240]]],
+  [{x:280,y:1270}, {x:-15,y:1670}, "passage", [[380,1370]]],
+  [{x:580,y:850}, {x:830,y:1670}, "passage", [[660,960],[670,1030],[890,1270]]],
+  [{x:1806,y:1650}, {x:1708,y:90}, "passage", [[1770,1080],[1840,1060],[1840,950],[1810,970],[1840,800],[1900,660],[1880,530],[1710,450],[1790,310],[1600,300]]],
+];
+
+/* Status per realm, from the Game Tracker tab */
+const TRACKER = { hives: "Complete", inbetween: "Complete", megasphere: "Complete", drowned: "Complete",
+  piscus: "Complete", primary: "Complete", stockton: "Complete", catacombs: "Complete" };
+
+/* Links between missions, for the panel */
+const links = {};
+NODES.forEach(n => links[n.id] = { to: new Set(), from: new Set(), with: new Set() });
+EDGES.forEach(([a, b, style, , both]) => {
+  if (typeof a !== "string" || typeof b !== "string") return;
+  if (style === "tether") { links[a].with.add(b); links[b].with.add(a); return; }
+  if (both) { links[a].with.add(b); links[b].with.add(a); }
+  else { links[a].to.add(b); links[b].from.add(a); }
+});
+
+/* =========================================================
+   DRAWING
+   ========================================================= */
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const WORLD = { x: -900, y: -380, w: 3470, h: 2280 };
+
+// seeded noise so the hand-drawn wobble is stable between visits
+function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function hash(str) { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h; }
+
+function smoothClosed(pts) {
+  const n = pts.length; let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d + "Z";
+}
+function smoothOpen(pts) {
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  if (pts.length === 2) return d + `L${pts[1][0].toFixed(1)},${pts[1][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function blob(cx, cy, rx, ry, seed, count = 22, wob = 0.09) {
+  const rand = rng(seed), pts = [];
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2, k = 1 + (rand() - 0.5) * 2 * wob;
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return smoothClosed(pts);
+}
+function roughBand(x, y, w, h, seed) {
+  const rand = rng(seed), top = [], bot = [], step = 80;
+  for (let px = x; px <= x + w; px += step) top.push([px, y + (rand() - 0.5) * 34]);
+  for (let px = x + w; px >= x; px -= step) bot.push([px, y + h + (rand() - 0.5) * 20]);
+  return smoothClosed(top.concat(bot));
+}
+
+/* defs: textures, gradients, markers */
+const defs = el("defs", {}, svg);
+defs.innerHTML = `
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="4" seed="7"/>
+    <feColorMatrix values="0 0 0 0 .16  0 0 0 0 .12  0 0 0 0 .09  0 0 0 .55 0"/>
+  </filter>
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="9"/></filter>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity=".6"/></filter>
+  <pattern id="hatch" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+    <line x1="0" y1="0" x2="0" y2="18" stroke="#000" stroke-opacity=".18" stroke-width="5"/>
+  </pattern>
+  <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+    <stop offset="60%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".65"/>
+  </radialGradient>
+  <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#3d5a1a"/><stop offset=".55" stop-color="#4a3418"/><stop offset="1" stop-color="#2a1d12"/>
+  </linearGradient>
+  <linearGradient id="bins" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#5a3a14"/><stop offset="1" stop-color="#20160d"/>
+  </linearGradient>
+  ${["ember:#e0782f", "slime:#9cc23f"].map(s => { const [n, c] = s.split(":"); return `
+  <marker id="arrow-${n}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.2" markerHeight="4.2" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 L3,5 Z" fill="${c}"/></marker>`; }).join("")}
+`;
+REALMS.forEach(r => {
+  if (!r.color) return;
+  defs.insertAdjacentHTML("beforeend",
+    `<radialGradient id="g-${r.id}" cx="45%" cy="40%" r="65%"><stop offset="0" stop-color="${r.color}" stop-opacity=".95"/><stop offset=".75" stop-color="${r.color}" stop-opacity=".55"/><stop offset="1" stop-color="#0b0806" stop-opacity=".85"/></radialGradient>`);
+});
+
+const world = el("g", {}, svg);
+// ground
+el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, fill: "#1d1610" }, world);
+el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, filter: "url(#grain)" }, world);
+el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, fill: "url(#hatch)", opacity: .5 }, world);
+
+// surface band: Dumpton, As Above
+const surface = el("g", { class: "realm-shape", "data-realm": "dumpton", tabindex: 0, role: "button", "aria-label": "Dumpton, As Above" }, world);
+el("path", { d: roughBand(-870, -360, 3420, 200, 11), fill: "url(#surface)", stroke: "#0b0806", "stroke-width": 6 }, surface);
+// grass tufts along the top
+(() => { const rand = rng(99); let d = ""; for (let x = -860; x < 2540; x += 22) { const h = 10 + rand() * 18; d += `M${x},-340 l${4 + rand()*4},-${h} l${4 + rand()*4},${h}`; } el("path", { d, stroke: "#6f9a2a", "stroke-width": 3, fill: "none", opacity: .7 }, surface); })();
+const dumptonTitle = el("text", { x: 920, y: -230, "text-anchor": "middle", "font-family": "Grenze Gotisch, Georgia, serif", "font-weight": 700, "font-size": 64, fill: "#e9dcbf" }, surface);
+dumptonTitle.textContent = "Dumpton · As Above";
+const sumptonTitle = el("text", { x: 920, y: -110, "text-anchor": "middle", "font-family": "Grenze Gotisch, Georgia, serif", "font-weight": 700, "font-size": 48, fill: "#e0782f", "letter-spacing": 4 }, world);
+sumptonTitle.textContent = "Sumpton · So Below";
+
+// valley band
+const valley = el("g", { class: "realm-shape", "data-realm": "valley", tabindex: 0, role: "button", "aria-label": "Valley of the Bins" }, world);
+el("path", { d: roughBand(-860, 1665, 3410, 190, 21), fill: "url(#bins)", stroke: "#0b0806", "stroke-width": 6 }, valley);
+// little bins scattered along the valley floor
+(() => { const rand = rng(5); for (let i = 0; i < 46; i++) {
+  const x = -820 + rand() * 3330, y = 1720 + rand() * 100, s = 0.7 + rand() * 0.6;
+  const g = el("g", { transform: `translate(${x.toFixed(0)},${y.toFixed(0)}) rotate(${((rand()-.5)*40).toFixed(0)}) scale(${s.toFixed(2)})`, opacity: .55 }, valley);
+  el("path", { d: "M-12,-14 L12,-14 L9,16 L-9,16 Z", fill: "#3a2a18", stroke: "#0b0806", "stroke-width": 2 }, g);
+  el("rect", { x: -15, y: -19, width: 30, height: 6, rx: 2, fill: "#4a3620", stroke: "#0b0806", "stroke-width": 2 }, g);
+} })();
+
+// passages behind realms
+const passages = el("g", {}, world);
+
+// realm shapes, largest first so small ones stay clickable
+const realmLayer = el("g", {}, world);
+REALMS.filter(r => r.color).forEach(r => {
+  const g = el("g", { class: "realm-shape", "data-realm": r.id, tabindex: 0, role: "button", "aria-label": r.name }, realmLayer);
+  const rx = r.rx || r.r, ry = r.ry || r.r;
+  const isCloud = r.id === "warrens";
+  const d = blob(r.cx, r.cy, rx, ry, hash(r.id), isCloud ? 30 : 22, isCloud ? 0.22 : 0.09);
+  el("path", { d, fill: `url(#g-${r.id})`, stroke: "#0b0806", "stroke-width": 7, filter: "url(#shadow)" }, g);
+  el("path", { d, fill: "none", stroke: "#e9dcbf", "stroke-opacity": .28, "stroke-width": 2.5, "stroke-dasharray": "3 9" , transform: `translate(0,0)` }, g);
+});
+// Delta marker between the Drowned Nations and Piscus
+(() => {
+  const g = el("g", { transform: "translate(198,742) rotate(75)", opacity: .9 }, world);
+  el("path", { d: "M-50,-14 L20,-14 L20,-30 L52,0 L20,30 L20,14 L-50,14 Z", fill: "#e9dcbf", stroke: "#0b0806", "stroke-width": 3 }, g);
+  const t = el("text", { x: -6, y: 6, "text-anchor": "middle", "font-family": "Alegreya SC, Georgia, serif", "font-size": 18, "font-weight": 700, fill: "#17120e" }, g);
+  t.textContent = "Delta";
+})();
+
+// edges
+const routeLayer = el("g", {}, world);
+const edgeEls = [];
+const pt = v => typeof v === "string" ? [nodeById[v].x, nodeById[v].y] : [v.x, v.y];
+function trim(p, toward, dist) {
+  const dx = toward[0] - p[0], dy = toward[1] - p[1], L = Math.hypot(dx, dy) || 1;
+  const k = Math.min(dist, L * 0.6) / L;
+  return [p[0] + dx * k, p[1] + dy * k];
+}
+EDGES.forEach(([a, b, style, way = [], both]) => {
+  let pts = [pt(a), ...way, pt(b)];
+  if (typeof a === "string") pts[0] = trim(pts[0], pts[1], style === "tether" ? 40 : 58);
+  if (typeof b === "string") pts[pts.length - 1] = trim(pts[pts.length - 1], pts[pts.length - 2], style === "tether" ? 40 : 62);
+  const d = smoothOpen(pts);
+  const layer = style === "passage" ? passages : routeLayer;
+  if (style === "route" || style === "scroblin") {
+    el("path", { d, fill: "none", stroke: "#0b0806", "stroke-width": 12, "stroke-linecap": "round", opacity: .7 }, layer);
+  }
+  const cls = style === "route" ? "route flow" : style === "scroblin" ? "route scroblin flow" : style;
+  const attrs = { d, class: cls };
+  if (style === "route" || style === "scroblin") {
+    const m = style === "scroblin" ? "url(#arrow-slime)" : "url(#arrow-ember)";
+    attrs["marker-end"] = m; if (both) attrs["marker-start"] = m;
+  }
+  const p = el("path", attrs, layer);
+  edgeEls.push({ el: p, a: typeof a === "string" ? a : null, b: typeof b === "string" ? b : null });
+});
+
+// realm labels (banners)
+const labelLayer = el("g", {}, world);
+function banner(r) {
+  const g = el("g", { class: "realm-label", "data-realm": r.id, tabindex: 0, role: "button", "aria-label": `${r.name}: read lore` }, labelLayer);
+  const t = el("text", { x: r.lx, y: r.ly, "text-anchor": "middle", "dominant-baseline": "central", "font-size": 34 }, g);
+  t.textContent = r.name;
+  const w = Math.max(160, r.name.length * 15.5 + 44), h = 54;
+  const rect = el("rect", { x: r.lx - w / 2, y: r.ly - h / 2, width: w, height: h, rx: 4, fill: "#0e0a07", "fill-opacity": .88, stroke: "#4a3a2c", "stroke-width": 2.5 }, g);
+  g.insertBefore(rect, t);
+  if (TRACKER[r.id]) {
+    const s = el("g", { transform: `translate(${r.lx + w / 2 - 4},${r.ly - h / 2 + 4})` }, g);
+    el("circle", { r: 15, fill: "#9cc23f", stroke: "#0b0806", "stroke-width": 3 }, s);
+    el("path", { d: "M-7,0 L-2,6 L8,-6", fill: "none", stroke: "#0b0806", "stroke-width": 4, "stroke-linecap": "round", "stroke-linejoin": "round" }, s);
+  }
+}
+REALMS.filter(r => r.lx !== undefined).forEach(banner);
+
+// mission nodes
+const nodeLayer = el("g", {}, world);
+const nodeEls = {};
+function wrap(name, max = 12) {
+  const words = name.split(" "), lines = []; let cur = "";
+  words.forEach(w => { if ((cur + " " + w).trim().length > max && cur) { lines.push(cur); cur = w; } else cur = (cur + " " + w).trim(); });
+  if (cur) lines.push(cur);
+  return lines;
+}
+function hexPath(w, h) {
+  const a = 22, x = w / 2, y = h / 2;
+  return `M${-x + a},${-y} L${x - a},${-y} L${x},0 L${x - a},${y} L${-x + a},${y} L${-x},0 Z`;
+}
+NODES.forEach(n => {
+  const k = KINDS[n.kind];
+  const g = el("g", { class: "node", transform: `translate(${n.x},${n.y})`, "data-node": n.id, tabindex: 0, role: "button",
+    "aria-label": `${n.name}${n.pdf ? ", open mission" : ""}` }, nodeLayer);
+  if (n.kind === "camp") {
+    el("circle", { class: "hex", r: n.r || 42, fill: k.fill, stroke: k.stroke, "stroke-width": 3, filter: "url(#shadow)" }, g);
+  } else {
+    el("path", { class: "hex", d: hexPath(140, 104), fill: k.fill, stroke: k.stroke, "stroke-width": 3.5, filter: "url(#shadow)" }, g);
+    el("path", { d: hexPath(124, 90), fill: "none", stroke: "#000", "stroke-opacity": .22, "stroke-width": 2 }, g);
+  }
+  const lines = wrap(n.name, n.kind === "camp" ? 9 : 12);
+  const fs = n.kind === "camp" ? 15 : lines.length > 3 ? 15 : 18;
+  const t = el("text", { "text-anchor": "middle", "font-size": fs, fill: k.text }, g);
+  lines.forEach((ln, i) => {
+    const ts = el("tspan", { x: 0, y: (i - (lines.length - 1) / 2) * fs * 1.08 + fs * 0.35 }, t);
+    ts.textContent = ln;
+  });
+  if (n.pdf) { // scroll badge = has a brief
+    const b = el("g", { transform: "translate(52,-40)" }, g);
+    el("circle", { r: 13, fill: "#17120e", stroke: "#e9dcbf", "stroke-width": 2 }, b);
+    el("path", { d: "M-5,-6 h8 l3,3 v9 h-11 z M-2,-1 h5 M-2,3 h5", fill: "none", stroke: "#e9dcbf", "stroke-width": 1.8, "stroke-linejoin": "round" }, b);
+  }
+  el("title", {}, g).textContent = n.name;
+  nodeEls[n.id] = g;
+});
+
+// vignette (fixed over world)
+el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, fill: "url(#vignette)", "pointer-events": "none" }, world);
+
+/* ---------- Legend ---------- */
+const legend = document.getElementById("legend");
+const swatch = (kind) => { const k = KINDS[kind];
+  return `<svg width="22" height="18" viewBox="-12 -10 24 20" aria-hidden="true"><path d="M-6,-8 L6,-8 L11,0 L6,8 L-6,8 L-11,0 Z" fill="${k.fill}" stroke="${k.stroke}" stroke-width="1.5"/></svg>`; };
+legend.innerHTML = [
+  ["skirmish", "Mission"], ["feature", "Featured mission"], ["scroblin", "Scroblin campaign"], ["route", "Descent mission"],
+].map(([k, l]) => `<span class="k">${swatch(k)}${l}</span>`).join("") +
+  `<span class="k"><svg width="22" height="10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" stroke="#e0782f" stroke-width="3" stroke-dasharray="6 4"/></svg>Route</span>` +
+  `<span class="k"><svg width="22" height="10" aria-hidden="true"><line x1="2" y1="5" x2="21" y2="5" stroke="#b8382b" stroke-width="5" stroke-dasharray="1 6" stroke-linecap="round"/></svg>Raid tunnel</span>` +
+  `<span class="k"><svg width="22" height="22" viewBox="-11 -11 22 22" aria-hidden="true"><circle r="9" fill="#9cc23f" stroke="#0b0806" stroke-width="2"/><path d="M-4,0 L-1,3 L5,-4" fill="none" stroke="#0b0806" stroke-width="2.4"/></svg>Realm complete</span>` +
+  `<span class="k"><svg width="22" height="22" viewBox="-11 -11 22 22" aria-hidden="true"><circle r="9" fill="#17120e" stroke="#e9dcbf" stroke-width="1.5"/><path d="M-4,-5 h6 l2,2 v7 h-8 z" fill="none" stroke="#e9dcbf" stroke-width="1.3"/></svg>Has mission brief</span>` +
+  `<span class="hint">Drag to pan, scroll or pinch to zoom.</span>`;
+document.getElementById("btn-legend").addEventListener("click", e => {
+  const on = legend.classList.toggle("show"); e.currentTarget.setAttribute("aria-expanded", on);
+});
+
+/* =========================================================
+   PAN & ZOOM
+   ========================================================= */
+let view = { ...WORLD };
+const FOCUS = { x: -1060, y: -600, w: 3640, h: 2480 };
+function apply() { svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`); }
+function aspect() { const r = svg.getBoundingClientRect(); return r.width / Math.max(1, r.height); }
+function fit(box = FOCUS) {
+  const a = aspect(); let w = box.w, h = box.h;
+  if (w / h > a) h = w / a; else w = h * a;
+  view = { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h }; apply();
+}
+function clientToWorld(cx, cy) {
+  const r = svg.getBoundingClientRect();
+  return { x: view.x + (cx - r.left) / r.width * view.w, y: view.y + (cy - r.top) / r.height * view.h };
+}
+function zoomAt(f, cx, cy) {
+  const minW = 500, maxW = WORLD.w * 1.6;
+  const nw = Math.min(maxW, Math.max(minW, view.w * f)); f = nw / view.w;
+  const p = cx === undefined ? { x: view.x + view.w / 2, y: view.y + view.h / 2 } : clientToWorld(cx, cy);
+  view = { x: p.x - (p.x - view.x) * f, y: p.y - (p.y - view.y) * f, w: view.w * f, h: view.h * f }; apply();
+}
+let anim = null;
+function flyTo(x, y, w) {
+  const a = aspect(); const h = w / a; const target = { x: x - w / 2, y: y - h / 2, w, h };
+  const from = { ...view }, t0 = performance.now(), dur = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 450;
+  cancelAnimationFrame(anim);
+  const step = t => {
+    const k = dur ? Math.min(1, (t - t0) / dur) : 1, e = 1 - Math.pow(1 - k, 3);
+    for (const key in view) view[key] = from[key] + (target[key] - from[key]) * e;
+    apply(); if (k < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+svg.addEventListener("wheel", e => { e.preventDefault(); zoomAt(Math.exp(e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
+
+const pointers = new Map(); let dragMoved = 0, pinch = null;
+svg.addEventListener("pointerdown", e => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); dragMoved = 0;
+  if (pointers.size === 2) { const [p1, p2] = [...pointers.values()]; pinch = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y) }; }
+});
+svg.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId), cur = { x: e.clientX, y: e.clientY };
+  pointers.set(e.pointerId, cur);
+  if (pointers.size === 1) {
+    const r = svg.getBoundingClientRect(), dx = cur.x - prev.x, dy = cur.y - prev.y;
+    dragMoved += Math.abs(dx) + Math.abs(dy);
+    if (dragMoved > 4) { svg.classList.add("dragging"); if (!svg.hasPointerCapture(e.pointerId)) svg.setPointerCapture(e.pointerId); }
+    view.x -= dx / r.width * view.w; view.y -= dy / r.height * view.h; apply();
+  } else if (pointers.size === 2 && pinch) {
+    const [p1, p2] = [...pointers.values()], d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    zoomAt(pinch.d / d, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2); pinch.d = d; dragMoved = 99;
+  }
+});
+const endPointer = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; if (!pointers.size) svg.classList.remove("dragging"); };
+svg.addEventListener("pointerup", endPointer); svg.addEventListener("pointercancel", endPointer);
+
+document.getElementById("btn-in").onclick = () => zoomAt(0.7);
+document.getElementById("btn-out").onclick = () => zoomAt(1 / 0.7);
+document.getElementById("btn-fit").onclick = () => { const v = { ...view }; fit(); const t = { ...view }; view = v; flyTo(t.x + t.w / 2, t.y + t.h / 2, t.w); };
+
+/* =========================================================
+   PANEL
+   ========================================================= */
+const panel = document.getElementById("panel"), body = document.getElementById("panel-body"), eyebrow = document.getElementById("panel-eyebrow");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ext = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>`;
+
+function setActive(id) {
+  document.querySelectorAll(".node.active").forEach(n => n.classList.remove("active"));
+  const lit = new Set();
+  if (id && nodeEls[id]) {
+    nodeEls[id].classList.add("active"); lit.add(id);
+    const l = links[id]; [...l.to, ...l.from, ...l.with].forEach(x => lit.add(x));
+  }
+  edgeEls.forEach(e => e.el.classList.toggle("dim", !!id && !(e.a === id || e.b === id)));
+}
+function nodeButton(id) {
+  const n = nodeById[id], r = realmById[n.realm];
+  return `<li><button data-go="${id}"><span>${esc(n.name)}</span><span class="meta">${esc(r ? r.name : "")}</span></button></li>`;
+}
+function openPanel(html, eb, hash) {
+  eyebrow.textContent = eb; body.innerHTML = html; body.scrollTop = 0;
+  panel.classList.add("open");
+  body.querySelectorAll("[data-go]").forEach(b => b.onclick = () => focusNode(b.dataset.go));
+  body.querySelectorAll("[data-realm-go]").forEach(b => b.onclick = () => showRealm(b.dataset.realmGo, true));
+  if (hash !== undefined) { try { history.replaceState(null, "", hash ? "#" + hash : location.pathname + location.search); } catch (e) {} }
+}
+function closePanel() {
+  panel.classList.remove("open"); setActive(null);
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+}
+document.getElementById("panel-close").onclick = closePanel;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+
+function showNode(id) {
+  const n = nodeById[id]; if (!n) return;
+  const r = realmById[n.realm], k = KINDS[n.kind];
+  const status = TRACKER[n.trackerRealm || n.realm];
+  const l = links[id];
+  let h = `<h2>${esc(n.name)}</h2><div class="chips"><span class="chip kind">${k.label}</span>`;
+  if (status) h += `<span class="chip done">Realm ${status.toLowerCase()}</span>`;
+  h += `</div>`;
+  if (n.blurb) h += `<p>${esc(n.blurb)}</p>`;
+  if (n.pdf) h += `<a class="btn primary cta" href="${drive(n.pdf)}" target="_blank" rel="noopener">Open mission brief ${ext}</a>`;
+  else if (n.kind !== "gate" && n.kind !== "camp") h += `<p class="none">No mission brief is linked for this one in the Game Tracker.</p>`;
+  if (n.extra) h += `<ul class="linklist"><li><a href="${drive(n.extra.id)}" target="_blank" rel="noopener"><span>${esc(n.extra.name)}</span>${ext}</a></li></ul>`;
+  if (id.startsWith("sts-")) h += `<p class="none">This skirmish is fought in three places on the map: Stockton's Folly, the Drowned Nations and the Piscus Dimension. All three use the same brief.</p>`;
+  if (l.from.size) h += `<div class="section-label">Reached from</div><ul class="linklist">${[...l.from].map(nodeButton).join("")}</ul>`;
+  if (l.to.size) h += `<div class="section-label">Leads to</div><ul class="linklist">${[...l.to].map(nodeButton).join("")}</ul>`;
+  if (l.with.size) h += `<div class="section-label">Connected with</div><ul class="linklist">${[...l.with].map(nodeButton).join("")}</ul>`;
+  if (r) h += `<div class="section-label">Realm</div><ul class="linklist"><li><button data-realm-go="${r.id}"><span>${esc(r.name)}</span><span class="meta">Read lore</span></button></li></ul>`;
+  openPanel(h, r ? r.name : "", id);
+  setActive(id);
+}
+function showRealm(id, fly) {
+  const r = realmById[id]; if (!r) return;
+  let h = `<h2>${esc(r.name)}</h2><div class="chips"><span class="chip kind">Realm</span>`;
+  if (TRACKER[id]) h += `<span class="chip done">${TRACKER[id]}</span>`;
+  h += `</div>` + r.lore.map(p => `<p>${esc(p)}</p>`).join("");
+  if (r.pack) h += `<a class="btn primary cta" href="${drive(r.pack)}" target="_blank" rel="noopener">Open ${esc(r.packName)} ${ext}</a>`;
+  const ms = NODES.filter(n => (n.trackerRealm || n.realm) === id && n.kind !== "gate");
+  if (ms.length) h += `<div class="section-label">Missions here</div><ul class="linklist">${ms.map(n => nodeButton(n.id)).join("")}</ul>`;
+  h += `<p class="source">${r.note ? esc(r.note) + " " : ""}From <a href="${drive("1DrTJucBIF2r4TlsSbWQ2BhftdD2islzi")}" target="_blank" rel="noopener">Realms of Sumpton</a>.</p>`;
+  openPanel(h, "Realm of Sumpton", "realm-" + id);
+  setActive(null);
+  if (fly && r.cx !== undefined) flyTo(r.cx, r.cy, Math.max(900, (r.rx || r.r) * 4.2));
+}
+function focusNode(id) {
+  const n = nodeById[id]; if (!n) return;
+  flyTo(n.x + (innerWidth > 640 ? 180 : 0), n.y + (innerWidth > 640 ? 0 : 160), 1150);
+  showNode(id);
+}
+function showIndex() {
+  const groups = REALMS.map(r => ({ r, ms: NODES.filter(n => (n.trackerRealm || n.realm) === r.id && n.kind !== "gate" && n.kind !== "camp") })).filter(g => g.ms.length);
+  let h = `<h2>Mission Index</h2><label class="section-label" for="mission-search" style="display:block;border:0;margin:0">Find a mission</label>
+    <input class="search" id="mission-search" type="search" placeholder="Type a mission name" autocomplete="off">
+    <div id="index-list">` +
+    groups.map(g => `<div class="realm-group" data-group><h3>${esc(g.r.name)}</h3><ul class="linklist">${g.ms.map(n =>
+      `<li data-name="${esc(n.name.toLowerCase())}"><button data-go="${n.id}"><span>${esc(n.name)}</span><span class="meta">${n.pdf ? "Brief" : "No brief"}</span></button></li>`).join("")}</ul></div>`).join("") +
+    `</div><div class="section-label">Packs and references</div><ul class="linklist">` +
+    RESOURCES.map(x => `<li><a href="${drive(x.id)}" target="_blank" rel="noopener"><span>${esc(x.name)}</span><span class="meta">${esc(x.note)}</span></a></li>`).join("") +
+    `</ul><p class="source">Mission and pack links come from the Game Tracker sheet.</p>`;
+  openPanel(h, "Sumpton", "index");
+  setActive(null);
+  const s = document.getElementById("mission-search");
+  s.oninput = () => {
+    const q = s.value.trim().toLowerCase();
+    body.querySelectorAll("[data-group]").forEach(g => {
+      let any = false;
+      g.querySelectorAll("li").forEach(li => { const on = !q || li.dataset.name.includes(q); li.hidden = !on; any = any || on; });
+      g.hidden = !any;
+    });
+  };
+}
+document.getElementById("btn-index").onclick = showIndex;
+
+/* clicks on the map: ignore if it was a drag */
+svg.addEventListener("click", e => {
+  if (dragMoved > 6) return;
+  const node = e.target.closest("[data-node]"); if (node) { showNode(node.dataset.node); return; }
+  const realm = e.target.closest("[data-realm]"); if (realm) { showRealm(realm.dataset.realm, false); return; }
+});
+svg.addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const node = e.target.closest("[data-node]"); const realm = e.target.closest("[data-realm]");
+  if (node) { e.preventDefault(); focusNode(node.dataset.node); }
+  else if (realm) { e.preventDefault(); showRealm(realm.dataset.realm, true); }
+});
+
+/* hash routing: #mission-id, #realm-id, #index */
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h) return;
+  if (h === "index") showIndex();
+  else if (h.startsWith("realm-")) showRealm(h.slice(6), true);
+  else if (nodeById[h]) focusNode(h);
+}
+addEventListener("hashchange", route);
+addEventListener("resize", () => { const c = { x: view.x + view.w / 2, y: view.y + view.h / 2 }, w = view.w; const a = aspect(); view = { x: c.x - w / 2, y: c.y - w / a / 2, w, h: w / a }; apply(); });
+
+fit(); route();
+})();
+</script>
+<!--ARTIFACT-END-->
+</html>
