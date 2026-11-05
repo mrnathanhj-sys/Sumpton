@@ -143,9 +143,9 @@ body {
 .route.scroblin { stroke: var(--slime); }
 .passage { fill: none; stroke: var(--blood); stroke-width: 11; stroke-dasharray: 2 16; stroke-linecap: round; opacity: .9; }
 .tether { fill: none; stroke: var(--ink-dim); stroke-width: 4; stroke-dasharray: 12 10; opacity: .7; }
-.flow { animation: flow 1.6s linear infinite; }
-@keyframes flow { to { stroke-dashoffset: -52; } }
-@media (prefers-reduced-motion: reduce) { .flow { animation: none; } .panel { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+/* Phones: skip the heavy SVG filters so panning and zooming stay smooth */
+@media (pointer: coarse), (max-width: 640px) { #map [filter] { filter: none; } #map .grain { display: none; } }
 .dim { opacity: .25; transition: opacity .2s; }
 
 @media (max-width: 640px) {
@@ -460,7 +460,7 @@ REALMS.forEach(r => {
 const world = el("g", {}, svg);
 // ground
 el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, fill: "#1d1610" }, world);
-el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, filter: "url(#grain)" }, world);
+el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, filter: "url(#grain)", class: "grain" }, world);
 el("rect", { x: WORLD.x, y: WORLD.y, width: WORLD.w, height: WORLD.h, fill: "url(#hatch)", opacity: .5 }, world);
 
 // surface band: Dumpton, As Above
@@ -523,7 +523,7 @@ EDGES.forEach(([a, b, style, way = [], both]) => {
   if (style === "route" || style === "scroblin") {
     el("path", { d, fill: "none", stroke: "#0b0806", "stroke-width": 12, "stroke-linecap": "round", opacity: .7 }, layer);
   }
-  const cls = style === "route" ? "route flow" : style === "scroblin" ? "route scroblin flow" : style;
+  const cls = style === "route" ? "route" : style === "scroblin" ? "route scroblin" : style;
   const attrs = { d, class: cls };
   if (style === "route" || style === "scroblin") {
     const m = style === "scroblin" ? "url(#arrow-slime)" : "url(#arrow-ember)";
